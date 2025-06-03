@@ -1,18 +1,21 @@
 "use client";
 import { useState, useRef } from "react";
+import UploadToS3 from './pdfUploader';
 
 export default function Home() {
     const [pdfUrl, setPdfUrl] = useState(null);
     const [selectedFile, setSelectedFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef();
+    const [status, setStatus] = useState("");
 
     function onFileChange(e) {
         const file = e.target.files[0];
         if (file && file.type === "application/pdf") {
-            const url = URL.createObjectURL(file);
-            setPdfUrl(url);
+            if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+            setPdfUrl(URL.createObjectURL(file));
             setSelectedFile(file);
+            setStatus("");
         } else {
             alert("Please upload a valid PDF file");
             setPdfUrl(null);
@@ -25,46 +28,15 @@ export default function Home() {
         fileInputRef.current.click();
     }
 
-    // Convert file to base64
-    function fileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result.split(",")[1]); // Get only base64 string without metadata prefix
-            reader.onerror = error => reject(error);
-        });
+    function handleUploadClick() {
+        if (!selectedFile) return alert("No file selected!");
+        setStatus("Uploading...");
+        setUploading(true);
     }
 
-    async function uploadPdf() {
-        if (!selectedFile) {
-            alert("Please select a PDF file first");
-            return;
-        }
-        setUploading(true);
-
-        try {
-            const pdfBase64 = await fileToBase64(selectedFile);
-
-            const res = await fetch("/api/upload", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ pdfBase64, fileName: selectedFile.name }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                alert("Upload failed: " + (data.error || "Unknown error"));
-            } else {
-                alert("PDF uploaded successfully!");
-            }
-        } catch (error) {
-            alert("Upload failed: " + error.message);
-        } finally {
-            setUploading(false);
-        }
+    function onUploadComplete(msg) {
+        setStatus(msg);
+        setUploading(false);
     }
 
     return (
@@ -81,8 +53,7 @@ export default function Home() {
 
             <button
                 onClick={openFileDialog}
-                disabled={uploading}
-                className="mb-7 px-8 py-3 rounded-full border-2 border-sky-400 text-sky-400 font-medium text-base cursor-pointer transition-colors duration-300 bg-[#1f1f1f] hover:bg-sky-400 hover:text-[#121212] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mb-7 px-8 py-3 rounded-full border-2 border-sky-400 text-sky-400 font-medium text-base cursor-pointer transition-colors duration-300 bg-[#1f1f1f] hover:bg-sky-400 hover:text-[#121212]"
             >
                 Choose File
             </button>
@@ -99,12 +70,17 @@ export default function Home() {
                     />
 
                     <button
-                        onClick={uploadPdf}
-                        disabled={uploading}
-                        className="px-8 py-3 rounded-full bg-sky-400 text-[#121212] font-semibold text-base cursor-pointer shadow-[0_0_10px_#00bfff] transition-colors duration-300 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={handleUploadClick}
+                        className="px-6 py-2 rounded-full bg-green-600 hover:bg-green-700 text-white font-medium transition"
                     >
-                        {uploading ? "Uploading..." : "Upload to S3"}
+                        Upload PDF to S3
                     </button>
+
+                    <p className="mt-3">{status}</p>
+
+                    {uploading && (
+                        <UploadToS3 file={selectedFile} onUploadComplete={onUploadComplete} />
+                    )}
                 </>
             )}
         </div>
